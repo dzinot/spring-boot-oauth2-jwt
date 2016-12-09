@@ -1,11 +1,7 @@
 package com.kristijangeorgiev.spring.boot.oauth2.jwt.configuration;
 
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -17,9 +13,7 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.authentication.configurers.GlobalAuthenticationConfigurerAdapter;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.common.DefaultOAuth2AccessToken;
@@ -30,11 +24,7 @@ import org.springframework.security.oauth2.config.annotation.web.configuration.E
 import org.springframework.security.oauth2.config.annotation.web.configurers.AuthorizationServerEndpointsConfigurer;
 import org.springframework.security.oauth2.config.annotation.web.configurers.AuthorizationServerSecurityConfigurer;
 import org.springframework.security.oauth2.provider.OAuth2Authentication;
-import org.springframework.security.oauth2.provider.OAuth2Request;
-import org.springframework.security.oauth2.provider.token.DefaultAccessTokenConverter;
-import org.springframework.security.oauth2.provider.token.DefaultUserAuthenticationConverter;
 import org.springframework.security.oauth2.provider.token.TokenStore;
-import org.springframework.security.oauth2.provider.token.UserAuthenticationConverter;
 import org.springframework.security.oauth2.provider.token.store.JwtAccessTokenConverter;
 import org.springframework.security.oauth2.provider.token.store.JwtTokenStore;
 import org.springframework.security.oauth2.provider.token.store.KeyStoreKeyFactory;
@@ -87,13 +77,11 @@ public class OAuth2Configuration extends AuthorizationServerConfigurerAdapter {
 		JwtAccessTokenConverter converter = new CustomTokenEnhancer();
 		converter.setKeyPair(
 				new KeyStoreKeyFactory(new ClassPathResource("jwt.jks"), "password".toCharArray()).getKeyPair("jwt"));
-		converter.setAccessTokenConverter(new customAccessTokenConverter());
 		return converter;
 	}
 
 	/*
-	 * Add custom user principal information to the JWT token and merge user
-	 * authorities with OAuth2 client authorities
+	 * Add custom user principal information to the JWT token
 	 */
 	// TODO additional information fields should be get from configuration
 	protected static class CustomTokenEnhancer extends JwtAccessTokenConverter {
@@ -110,10 +98,6 @@ public class OAuth2Configuration extends AuthorizationServerConfigurerAdapter {
 			// Get the authorities from the user
 			Set<GrantedAuthority> authoritiesSet = new HashSet<>(authentication.getAuthorities());
 
-			// Get the authorities from the OAuth2 client and merge them with
-			// the user
-			authoritiesSet.addAll(authentication.getOAuth2Request().getAuthorities());
-
 			// Generate String array
 			String[] authorities = new String[authoritiesSet.size()];
 
@@ -125,66 +109,6 @@ public class OAuth2Configuration extends AuthorizationServerConfigurerAdapter {
 			customAccessToken.setAdditionalInformation(info);
 
 			return super.enhance(customAccessToken, authentication);
-		}
-	}
-
-	/*
-	 * Adds an option to set OAuth2 client authorities to the token when there's
-	 * a user available
-	 */
-	protected static class customAccessTokenConverter extends DefaultAccessTokenConverter {
-
-		private UserAuthenticationConverter userTokenConverter = new DefaultUserAuthenticationConverter();
-
-		/*
-		 * Flag to indicate if the grant type should be included in the
-		 * converted token
-		 */
-		private boolean includeGrantType;
-
-		// TODO externalise to configuration
-		private static final boolean CLIENT_TO_USER_AUTHORITIES = true;
-
-		@Override
-		public OAuth2Authentication extractAuthentication(Map<String, ?> map) {
-			Map<String, String> parameters = new HashMap<String, String>();
-
-			@SuppressWarnings("unchecked")
-			Set<String> scope = new LinkedHashSet<String>(
-					map.containsKey(SCOPE) ? (Collection<String>) map.get(SCOPE) : Collections.<String>emptySet());
-
-			Authentication user = userTokenConverter.extractAuthentication(map);
-
-			String clientId = (String) map.get(CLIENT_ID);
-			parameters.put(CLIENT_ID, clientId);
-
-			if (includeGrantType && map.containsKey(GRANT_TYPE))
-				parameters.put(GRANT_TYPE, (String) map.get(GRANT_TYPE));
-
-			Set<String> resourceIds = new LinkedHashSet<String>(
-					map.containsKey(AUD) ? getAudience(map) : Collections.<String>emptySet());
-
-			Collection<? extends GrantedAuthority> authorities = null;
-			if ((user == null && map.containsKey(AUTHORITIES))
-					|| (map.containsKey(AUTHORITIES) && CLIENT_TO_USER_AUTHORITIES)) {
-				@SuppressWarnings("unchecked")
-				String[] roles = ((Collection<String>) map.get(AUTHORITIES)).toArray(new String[0]);
-				authorities = AuthorityUtils.createAuthorityList(roles);
-			}
-
-			return new OAuth2Authentication(
-					new OAuth2Request(parameters, clientId, authorities, true, scope, resourceIds, null, null, null),
-					user);
-		}
-
-		private Collection<String> getAudience(Map<String, ?> map) {
-			Object auds = map.get(AUD);
-			if (auds instanceof Collection) {
-				@SuppressWarnings("unchecked")
-				Collection<String> result = (Collection<String>) auds;
-				return result;
-			}
-			return Collections.singleton((String) auds);
 		}
 	}
 
