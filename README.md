@@ -2,6 +2,8 @@
 
 Simple project on how to setup OAuth2 server and JWT tokens.
 
+# [For the updated project with Spring Boot 2 click here](https://github.com/dzinot/spring-boot-2-oauth2-authorization-jwt)
+
 ## In Short
 
 Use [Spring Security OAuth](https://projects.spring.io/spring-security-oauth/) project. 
